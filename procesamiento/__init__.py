@@ -17,6 +17,7 @@ from procesamiento.reportes import (
 from procesamiento.proyectos import (
     construir_proyectos,
     construir_dataframe_proyectos_listo,
+    columna_proyectos,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "construir_avances_fisicos",
     "construir_proyectos",
     "construir_dataframe_proyectos_listo",
+    "columna_proyectos",
 ]

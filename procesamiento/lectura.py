@@ -61,9 +61,9 @@ def procesar_datos(
     columnas_prog_ejec_fisica = plan_indicativo.select(
         "Codigo Meta", "Línea Estratégica", "Sector PDD",
         "Numero Programa PDD", "Programa PDD",
-        "Indicador de producto principal", "código de indicador principal",
-        "Meta de cuatrenio",
-        "Tipo de Acumulación", "Responsable", "Meta Física Esperada 2024",
+        "Indicador de producto principal", "Código del indicador principal",
+        "Meta de cuatrienio",
+        "Tipo de acumulación", "Responsable", "Meta Física Esperada 2024",
         "Meta Física Esperada 2025", "Meta Física Esperada 2026", "Meta Física Esperada 2027",
         "PROYECTOS 2024", "PROYECTOS 2025", "PROYECTOS/GESTIONES PROGRAMADAS 2026", "PROYECTOS 2026",
         "PROYECTOS 2027", "EJECUCIÓN 2024", "PORCENTAJE DE EJECUCIÓN 2024", "CATEGORÍA DE EJECUCIÓN FÍSICA 2024",

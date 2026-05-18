@@ -479,7 +479,7 @@ def generar_reporte_excel(
     df_det = datos["prog_fisica_financiera"].to_pandas()[[
         "Codigo Meta", "Línea Estratégica", "Sector PDD", "Programa PDD",
         "Indicador de producto principal", "Responsable",
-        "Meta de cuatrenio",
+        "Meta de cuatrienio",
         f"Meta Física Esperada {vigencia}",
         f"EJECUCIÓN {vigencia}",
         f"PORCENTAJE DE EJECUCIÓN {vigencia}",
@@ -503,7 +503,7 @@ def generar_reporte_excel(
     escribir_tabla(
         ws, df_det, inicio,
         columnas_pct=[f"Avance {vigencia}", "Avance acumulado"],
-        columnas_num=["Meta de cuatrenio", f"Meta {vigencia}",
+        columnas_num=["Meta de cuatrienio", f"Meta {vigencia}",
                       f"Ejecución {vigencia}", "Ejec. acumulada"],
     )
     ws.freeze_panes = ws.cell(row=inicio + 1, column=1)
@@ -522,7 +522,7 @@ def generar_reporte_excel(
 
         # Construye Indicador como "código — nombre" (igual que en la pestaña)
         def _fmt_ind(row):
-            cod = row.get("código de indicador principal")
+            cod = row.get("Código del indicador principal")
             nom = row.get("Indicador de producto principal")
             cod = "" if pd.isna(cod) else str(cod).strip()
             nom = "" if pd.isna(nom) else str(nom).strip()

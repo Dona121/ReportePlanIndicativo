@@ -2,13 +2,37 @@
 Extracción y preparación del inventario de proyectos/gestiones a partir
 de la columna de texto del Plan Indicativo.
 
+El Plan tiene cuatro columnas candidatas con texto libre:
+    - PROYECTOS 2024
+    - PROYECTOS 2025
+    - PROYECTOS 2026                          (ejecutados / en ejecución)
+    - PROYECTOS/GESTIONES PROGRAMADAS 2026    (programados de la vigencia)
+
 Funciones expuestas:
-    - construir_proyectos(datos, vigencia)
-    - construir_dataframe_proyectos_listo(_datos, vigencia)
+    - construir_proyectos(datos, vigencia, modo='en_ejecucion'|'programados')
+    - construir_dataframe_proyectos_listo(_datos, vigencia, modo=...)
+    - columna_proyectos(vigencia, modo): resuelve la columna fuente.
 """
 import streamlit as st
 import polars as pl
 import pandas as pd
+
+
+# =========================================================================
+# Resolución de la columna fuente según vigencia + modo
+# =========================================================================
+def columna_proyectos(vigencia: str, modo: str = "en_ejecucion") -> str:
+    """Devuelve el nombre de columna del Plan Indicativo a usar.
+
+    Para 2026 existen dos modos:
+        - 'en_ejecucion' -> 'PROYECTOS 2026'
+        - 'programados'  -> 'PROYECTOS/GESTIONES PROGRAMADAS 2026'
+
+    Para 2024, 2025 y 2027 sólo existe 'PROYECTOS {vigencia}'.
+    """
+    if vigencia == "2026" and modo == "programados":
+        return "PROYECTOS/GESTIONES PROGRAMADAS 2026"
+    return f"PROYECTOS {vigencia}"
 
 
 # =========================================================================
@@ -43,12 +67,22 @@ def _normalizar_numero(expr: pl.Expr) -> pl.Expr:
 # =========================================================================
 # Construcción del inventario
 # =========================================================================
-def construir_proyectos(datos: dict, vigencia: str) -> pl.DataFrame:
-    """Extrae proyectos/gestiones desde la columna de texto del Plan Indicativo."""
-    prog_ff = datos["prog_fisica_financiera"]
+def construir_proyectos(
+    datos: dict,
+    vigencia: str,
+    modo: str = "en_ejecucion",
+) -> pl.DataFrame:
+    """Extrae proyectos/gestiones desde la columna de texto del Plan Indicativo.
 
-    # La vigencia 2026 tiene dos columnas candidatas; se prefiere la que contenga datos.
-    col_proyecto = f"PROYECTOS {vigencia}"
+    Args:
+        datos: dict que devuelve procesar_datos.
+        vigencia: '2024' | '2025' | '2026' | '2027'.
+        modo: 'en_ejecucion' (default) o 'programados'. Solo cambia el
+              comportamiento cuando vigencia='2026'.
+    """
+    prog_ff = datos["prog_fisica_financiera"]
+    col_proyecto = columna_proyectos(vigencia, modo)
+
     if col_proyecto not in prog_ff.columns:
         return pl.DataFrame()
 
@@ -99,7 +133,7 @@ def construir_proyectos(datos: dict, vigencia: str) -> pl.DataFrame:
         prog_ff
         .select(
             "Codigo Meta", "Línea Estratégica", "Sector PDD", "Programa PDD",
-            "Indicador de producto principal", "código de indicador principal",
+            "Indicador de producto principal", "Código del indicador principal",
             col_proyecto,
         )
         .with_columns(
@@ -131,7 +165,11 @@ def construir_proyectos(datos: dict, vigencia: str) -> pl.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def construir_dataframe_proyectos_listo(_datos: dict, vigencia: str) -> pd.DataFrame:
+def construir_dataframe_proyectos_listo(
+    _datos: dict,
+    vigencia: str,
+    modo: str = "en_ejecucion",
+) -> pd.DataFrame:
     """Toma construir_proyectos y agrega columnas calculadas (Indicador, Avance)
     en el formato listo para mostrar/exportar.
 
@@ -140,7 +178,7 @@ def construir_dataframe_proyectos_listo(_datos: dict, vigencia: str) -> pd.DataF
     El cache se invalida automáticamente cuando cambian los datos porque la
     función procesar_datos también está cacheada y retorna un nuevo objeto.
     """
-    df = construir_proyectos(_datos, vigencia).to_pandas()
+    df = construir_proyectos(_datos, vigencia, modo).to_pandas()
     if df.empty:
         return df
 
@@ -152,7 +190,7 @@ def construir_dataframe_proyectos_listo(_datos: dict, vigencia: str) -> pd.DataF
     )
 
     def _fmt(row):
-        codigo = row.get("código de indicador principal")
+        codigo = row.get("Código del indicador principal")
         nombre = row.get("Indicador de producto principal")
         codigo = "" if pd.isna(codigo) else str(codigo).strip()
         nombre = "" if pd.isna(nombre) else str(nombre).strip()

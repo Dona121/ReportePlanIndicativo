@@ -2,16 +2,54 @@
 Pestaña 05 — Proyectos.
 
 Lista los proyectos y gestiones extraídos del texto del Plan Indicativo
-para la vigencia y permite descargar el inventario en Excel.
+para la vigencia seleccionada. Para 2026 permite alternar entre el
+listado de proyectos *en ejecución* (columna PROYECTOS 2026) y los
+proyectos *programados* (columna PROYECTOS/GESTIONES PROGRAMADAS 2026).
+
+Filtros disponibles: Línea Estratégica, Sector PDD y Tipo de Banco.
+Botones de descarga: vigencia actual y consolidado del cuatrienio (que
+ahora incluye una hoja extra con los programados 2026).
 """
 import pandas as pd
 import streamlit as st
 
+from config.styles import COLORS, FONT_MONO
 from config.tooltips import TOOLTIPS
 from utils.formato import formato_entero
 from utils.ui import seccion, render_table
-from procesamiento.proyectos import construir_dataframe_proyectos_listo
+from procesamiento.proyectos import (
+    construir_dataframe_proyectos_listo,
+    columna_proyectos,
+)
 from exportaciones.excel_proyectos import generar_excel_proyectos
+
+
+# Etiquetas de los dos modos disponibles para 2026
+_MODOS_2026 = {
+    "En ejecución": "en_ejecucion",
+    "Programados": "programados",
+}
+
+
+def _render_pildora_modo(modo_label: str, col_fuente: str) -> None:
+    """Tarjeta pequeña que indica la columna fuente que se está leyendo."""
+    st.markdown(
+        f"""
+        <div style="background:#fff; border:1px solid var(--hairline);
+                    border-left: 3px solid {COLORS['blue']};
+                    padding: 0.55rem 0.9rem; border-radius: 2px;
+                    margin: 0.2rem 0 1rem 0; display: inline-block;">
+            <span style="font-family: {FONT_MONO}, monospace; font-size: 0.66rem;
+                         letter-spacing: 0.16em; text-transform: uppercase;
+                         color: var(--ink-mute); margin-right: 0.5rem;">Fuente</span>
+            <span style="font-family: {FONT_MONO}, monospace; font-size: 0.8rem;
+                         color: var(--ink); font-weight: 600;">{modo_label}</span>
+            <span style="font-family: {FONT_MONO}, monospace; font-size: 0.72rem;
+                         color: var(--ink-mute); margin-left: 0.8rem;">{col_fuente}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_proyectos(filtro_vigencia: str, datos: dict) -> None:
@@ -31,7 +69,37 @@ def render_proyectos(filtro_vigencia: str, datos: dict) -> None:
         ),
     )
 
-    df_proy = construir_dataframe_proyectos_listo(datos, filtro_vigencia)
+    # =====================================================================
+    # Selector de modo (sólo aplica a 2026)
+    # =====================================================================
+    if filtro_vigencia == "2026":
+        st.markdown("##### Tipo de listado")
+        modo_label = st.radio(
+            "Tipo de listado",
+            options=list(_MODOS_2026.keys()),
+            horizontal=True,
+            key="proy_modo_2026",
+            label_visibility="collapsed",
+            help=(
+                "**En ejecución** — Proyectos y gestiones que ya están "
+                "corriendo (columna `PROYECTOS 2026`).\n\n"
+                "**Programados** — Proyectos planificados para la vigencia "
+                "que aún no inician (columna `PROYECTOS/GESTIONES "
+                "PROGRAMADAS 2026`)."
+            ),
+        )
+        modo = _MODOS_2026[modo_label]
+    else:
+        modo_label = "En ejecución"
+        modo = "en_ejecucion"
+
+    col_fuente = columna_proyectos(filtro_vigencia, modo)
+    _render_pildora_modo(modo_label, col_fuente)
+
+    # =====================================================================
+    # Construcción del DataFrame de proyectos
+    # =====================================================================
+    df_proy = construir_dataframe_proyectos_listo(datos, filtro_vigencia, modo)
 
     # ---- Botones de descarga (siempre visibles arriba) ----
     st.markdown("##### Descargar inventario")
@@ -45,15 +113,21 @@ def render_proyectos(filtro_vigencia: str, datos: dict) -> None:
                 "Meta", "Ejecutado", "Avance",
             ]
             df_export_vig = df_proy.reindex(columns=[c for c in cols_export if c in df_proy.columns])
+            subtitulo_export = (
+                f"Inventario completo extraído del Plan Indicativo · {modo_label}"
+                if filtro_vigencia == "2026"
+                else "Inventario completo extraído del Plan Indicativo"
+            )
             xlsx_vig = generar_excel_proyectos(
                 df_export_vig,
                 titulo=f"Proyectos y Gestiones — Vigencia {filtro_vigencia}",
-                subtitulo="Inventario completo extraído del Plan Indicativo",
+                subtitulo=subtitulo_export,
             )
+            sufijo_archivo = "_programados" if (filtro_vigencia == "2026" and modo == "programados") else ""
             st.download_button(
                 f"Descargar vigencia {filtro_vigencia}",
                 data=xlsx_vig,
-                file_name=f"proyectos_{filtro_vigencia}.xlsx",
+                file_name=f"proyectos_{filtro_vigencia}{sufijo_archivo}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="dl_proy_vig",
                 use_container_width=True,
@@ -63,15 +137,23 @@ def render_proyectos(filtro_vigencia: str, datos: dict) -> None:
                       use_container_width=True, key="dl_proy_vig_disabled")
 
     with dl2:
-        # Consolidado de las cuatro vigencias del Plan
+        # Consolidado: las cuatro vigencias + los programados 2026
         try:
             partes = []
+            # PROYECTOS 2024..2027 (en ejecución / regular)
             for v in ["2024", "2025", "2026", "2027"]:
-                df_v = construir_dataframe_proyectos_listo(datos, v)
+                df_v = construir_dataframe_proyectos_listo(datos, v, "en_ejecucion")
                 if not df_v.empty:
                     df_v = df_v.copy()
                     df_v.insert(0, "Vigencia PI", v)
                     partes.append(df_v)
+            # Programados 2026
+            df_prog_2026 = construir_dataframe_proyectos_listo(datos, "2026", "programados")
+            if not df_prog_2026.empty:
+                df_prog_2026 = df_prog_2026.copy()
+                df_prog_2026.insert(0, "Vigencia PI", "2026 (Programados)")
+                partes.append(df_prog_2026)
+
             if partes:
                 df_consol = pd.concat(partes, ignore_index=True)
                 cols_consol = [
@@ -83,7 +165,10 @@ def render_proyectos(filtro_vigencia: str, datos: dict) -> None:
                 xlsx_all = generar_excel_proyectos(
                     df_consol,
                     titulo="Proyectos y Gestiones — Consolidado del Cuatrienio",
-                    subtitulo="Inventario unificado de todas las vigencias del Plan (2024–2027)",
+                    subtitulo=(
+                        "Inventario unificado de todas las vigencias del Plan "
+                        "(2024–2027) e incluye los Programados 2026."
+                    ),
                 )
                 st.download_button(
                     "Descargar todas las vigencias",
@@ -102,10 +187,15 @@ def render_proyectos(filtro_vigencia: str, datos: dict) -> None:
     st.markdown("<hr/>", unsafe_allow_html=True)
 
     if df_proy.empty:
-        st.info(f"No hay proyectos ni gestiones registrados para la vigencia {filtro_vigencia}.")
+        st.info(
+            f"No hay proyectos ni gestiones registrados para la vigencia "
+            f"{filtro_vigencia} · {modo_label}."
+        )
         return
 
-    # ---- Conteo por tipo de banco (sustituye a las tarjetas monetarias) ----
+    # =====================================================================
+    # KPIs por tipo de banco
+    # =====================================================================
     total_registros = len(df_proy)
 
     conteo_bancos = (
@@ -113,7 +203,6 @@ def render_proyectos(filtro_vigencia: str, datos: dict) -> None:
         .replace("", "Sin clasificar")
         .value_counts()
     )
-    # Tomamos los tres tipos de banco con más registros + total general
     tipos_top = conteo_bancos.head(3)
 
     columnas_kpi = st.columns(1 + len(tipos_top))
@@ -126,7 +215,9 @@ def render_proyectos(filtro_vigencia: str, datos: dict) -> None:
 
     st.markdown(" ")
 
-    # ---- Filtros ----
+    # =====================================================================
+    # Filtros del usuario
+    # =====================================================================
     fp1, fp2, fp3 = st.columns(3)
     with fp1:
         lineas_p = ["(Todas)"] + sorted(df_proy["Línea Estratégica"].dropna().unique().tolist())

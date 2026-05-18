@@ -71,7 +71,7 @@ def _calcular_distribucion(
         )
 
     n_metas = df.get_column("Codigo Meta").count()
-    total_cuatrienio = df.select(pl.col("Meta de cuatrenio").sum()).item() or 0
+    total_cuatrienio = df.select(pl.col("Meta de cuatrienio").sum()).item() or 0
 
     filas = []
     for v in _VIGENCIAS:
