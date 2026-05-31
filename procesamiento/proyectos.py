@@ -43,25 +43,22 @@ def _extraer_regex(expr: pl.Expr, patron: str) -> pl.Expr:
     return expr.str.extract(patron, group_index=1).str.strip_chars()
 
 
-def _normalizar_numero(expr: pl.Expr) -> pl.Expr:
-    """Normaliza una cadena numérica con separadores variados a Float64."""
-    x = expr.str.strip_chars().str.replace_all(r"\s+", "")
-    return (
-        pl.when(x.is_null() | (x == ""))
-        .then(pl.lit(None))
-        .when(x.str.contains(r"^\d{1,3}(?:\.\d{3})+,\d+$"))
-        .then(x.str.replace_all(r"\.", "").str.replace_all(",", "."))
-        .when(x.str.contains(r"^\d{1,3}(?:,\d{3})+\.\d+$"))
-        .then(x.str.replace_all(",", ""))
-        .when(x.str.contains(r"^\d{1,3}(?:\.\d{3})+$"))
-        .then(x.str.replace_all(r"\.", ""))
-        .when(x.str.contains(r"^\d{1,3}(?:,\d{3})+$"))
-        .then(x.str.replace_all(",", ""))
-        .when(x.str.contains(r",") & ~x.str.contains(r"\."))
-        .then(x.str.replace_all(",", "."))
-        .otherwise(x)
-        .cast(pl.Float64, strict=False)
-    )
+def _normalizar_numero(expr: pl.Expr, col_fuente: str) -> pl.Expr:
+    """Normaliza una cadena numérica extraída del texto del Plan Indicativo.
+
+    Replica la versión nueva del notebook: para ``PROYECTOS 2025`` los valores
+    ya vienen en formato US (punto decimal, sin separador de miles), así que
+    se castean tal cual. Para cualquier otra vigencia (incluido
+    ``PROYECTOS/GESTIONES PROGRAMADAS 2026``) se aplica un reemplazo masivo:
+    coma decimal → punto y se eliminan los puntos de miles, convirtiendo
+    "1.234,56" → "1234.56".
+    """
+    limpio = expr.str.strip_chars().str.replace_all(r"\s+", "")
+    if col_fuente == "PROYECTOS 2025":
+        valor = limpio
+    else:
+        valor = limpio.str.replace_many({",": ".", ".": ""})
+    return valor.cast(pl.Float64, strict=False)
 
 
 # =========================================================================
@@ -156,8 +153,8 @@ def construir_proyectos(
                  .alias("Nombre del Proyecto"),
             _extraer_regex(texto, patron_bpin).alias("BPIN"),
             _extraer_regex(texto, patron_tipo_banco).alias("Tipo de Banco"),
-            _normalizar_numero(_extraer_regex(texto, patron_meta)).alias("Meta"),
-            _normalizar_numero(_extraer_regex(texto, patron_ejecutado)).alias("Ejecutado"),
+            _normalizar_numero(_extraer_regex(texto, patron_meta), col_proyecto).alias("Meta"),
+            _normalizar_numero(_extraer_regex(texto, patron_ejecutado), col_proyecto).alias("Ejecutado"),
             _extraer_regex(texto, patron_estado).alias("Estado en portafolio"),
         )
         .drop(col_proyecto)
